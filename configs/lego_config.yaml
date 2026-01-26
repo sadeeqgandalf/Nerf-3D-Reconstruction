@@ -1,0 +1,32 @@
+# NeRF Training Configuration for Lego Scene
+
+model:
+  num_frequencies_xyz: 10
+  num_frequencies_dir: 4
+  hidden_dim: 256
+  num_layers: 8
+  skip_connection_layer: 4
+
+training:
+  lr: 5e-4
+  lr_decay: 0.1
+  lr_decay_steps: 250000
+  num_epochs: 100
+  num_rays: 1024
+  num_samples_coarse: 64
+  num_samples_fine: 128
+  batch_size: 1
+  white_bg: true
+  use_mixed_precision: true
+  save_every: 10000
+
+data:
+  data_dir: ./data/nerf_synthetic/lego
+  scene_name: lego
+  image_scale: 1.0
+  white_bg: true
+
+device: cuda
+log_dir: ./outputs/logs
+checkpoint_dir: ./outputs/checkpoints
+output_dir: ./outputs/renders
