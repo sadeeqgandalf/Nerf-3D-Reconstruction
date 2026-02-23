@@ -1,354 +1,111 @@
-# NeRF 3D Scene Reconstruction
+# NeRF 3D Reconstruction
 
-A production-ready PyTorch implementation of **Neural Radiance Fields (NeRF)** for novel view synthesis and 3D scene reconstruction. This project demonstrates advanced PyTorch engineering practices, efficient data loading, and industry-standard code organization.
+PyTorch implementation of NeRF (Neural Radiance Fields) for novel view synthesis. Train on a set of posed images, then render the scene from new camera angles. Paper: https://arxiv.org/abs/2003.08934
 
-## 🎯 Project Overview
+Uses positional encoding, an MLP for density and RGB, hierarchical (coarse and fine) volume sampling, and the standard volume rendering equation. Configuration is YAML-based, with type hints, logging, checkpointing, and optional mixed precision.
 
-NeRF learns a continuous 3D representation of a scene from a set of 2D images with known camera poses. The model can then render photorealistic novel views from any camera angle, effectively creating a 3D scene you can explore.
-
-### Key Features
-
-- ✅ **Complete NeRF Implementation**: Full implementation of the original NeRF paper
-- ✅ **Hierarchical Volume Sampling**: Coarse + fine network architecture for efficient training
-- ✅ **Production-Ready Code**: Clean architecture, type hints, comprehensive documentation
-- ✅ **Efficient PyTorch**: Custom DataLoaders, mixed precision training, optimized rendering
-- ✅ **Comprehensive Analysis**: Data exploration notebooks, training visualization, results analysis
-- ✅ **Industry Best Practices**: YAML configs, logging, checkpointing, unit tests
-
-## 📁 Project Structure
-
-```
-nerf-3d-reconstruction/
-├── src/
-│   ├── models/              # NeRF model architecture
-│   │   └── nerf.py         # MLP-based NeRF model with positional encoding
-│   ├── rendering/          # Volume rendering engine
-│   │   ├── rays.py         # Ray generation and sampling
-│   │   └── volume_renderer.py  # Volume rendering equation
-│   ├── data/               # Data loading pipeline
-│   │   ├── dataset.py      # NeRF dataset implementation
-│   │   └── transforms.py   # Data transformations
-│   ├── training/           # Training utilities
-│   │   ├── trainer.py      # Training loop with best practices
-│   │   └── losses.py       # Loss functions
-│   ├── utils/              # Utility functions
-│   │   ├── metrics.py      # PSNR, SSIM evaluation
-│   │   └── visualization.py  # Image/video saving utilities
-│   └── config/             # Configuration management
-│       └── config.py       # YAML-based config system
-├── configs/                # Training configurations
-│   └── lego_config.yaml    # Example config for Lego scene
-├── experiments/            # Training scripts
-│   └── train.py           # Main training script
-├── notebooks/              # Jupyter notebooks for analysis
-│   ├── 01_data_exploration.ipynb      # Dataset analysis
-│   ├── 02_training_analysis.ipynb     # Training metrics
-│   └── 03_results_visualization.ipynb # Results visualization
-├── data/                   # Dataset directory (gitignored)
-├── outputs/                # Training outputs (gitignored)
-│   ├── logs/              # TensorBoard logs
-│   ├── checkpoints/       # Model checkpoints
-│   └── renders/          # Rendered images/videos
-├── requirements.txt
-├── setup.py
-└── README.md
-```
-
-## 🚀 Quick Start
-
-### 1. Installation
+## Setup
 
 ```bash
-# Clone the repository
-cd nerf-3d-reconstruction
-
-# Create virtual environment (recommended)
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Windows: venv\Scripts\activate
+# Linux/Mac: source venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Install package in development mode
 pip install -e .
 ```
 
-### 2. Download Dataset
+## Data
 
-The project uses the NeRF synthetic Blender dataset. You have two options to get the data:
+The project uses the NeRF synthetic Blender dataset (lego, chair, drums, etc.).
 
-#### Option 1: Using Nerfstudio (Recommended - Easiest)
-
-Nerfstudio provides a convenient command-line tool to download the dataset:
+Option A — Nerfstudio (simplest):
 
 ```bash
-# Install nerfstudio (if not already installed)
 pip install nerfstudio
-
-# Download the Blender synthetic dataset
 ns-download-data blender
 ```
 
-**What this gives you:**
-- Downloads the complete Blender synthetic dataset (8 scenes: lego, chair, drums, ficus, hotdog, materials, mic, ship)
-- Automatically places data in a standard location (usually `~/.nerfstudio/data/`)
-- Ready-to-use format with proper directory structure
+Data is written to ~/.nerfstudio/data/blender/. Copy it into the repo:
 
-**After download, move/copy to project directory:**
 ```bash
-# Find where nerfstudio saved the data (usually ~/.nerfstudio/data/blender/)
-# Then copy to your project:
+# Linux/Mac
 cp -r ~/.nerfstudio/data/blender/* data/nerf_synthetic/
-# Or on Windows:
-xcopy /E /I "C:\Users\YourName\.nerfstudio\data\blender\*" "data\nerf_synthetic\"
+
+# Windows (adjust path)
+xcopy /E /I "%USERPROFILE%\.nerfstudio\data\blender\*" "data\nerf_synthetic\"
 ```
 
-#### Option 2: Manual Download
+Option B — Manual:
 
-Download directly from the original NeRF repository:
+Download nerf_synthetic from https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4, unzip, and place each scene folder (lego, chair, etc.) under data/nerf_synthetic/. Each scene must contain transforms_train.json, transforms_test.json, and image folders (e.g. train/, test/).
 
-1. **Visit the dataset link**: [NeRF Synthetic Dataset on Google Drive](https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4)
+## Run
 
-2. **Download the dataset**:
-   - Look for `nerf_synthetic.zip` or individual scene folders
-   - The dataset contains 8 synthetic scenes: lego, chair, drums, ficus, hotdog, materials, mic, ship
-
-3. **Extract and organize**:
-   ```bash
-   # Create data directory
-   mkdir -p data/nerf_synthetic
-   
-   # Extract the downloaded zip file
-   # Then move the scene folders to data/nerf_synthetic/
-   ```
-
-**Dataset Structure (after setup):**
-```
-data/nerf_synthetic/
-├── lego/
-│   ├── transforms_train.json
-│   ├── transforms_test.json
-│   └── train/ (or images/)  # Training images
-│   └── test/                 # Test images
-├── chair/
-│   ├── transforms_train.json
-│   ├── transforms_test.json
-│   └── train/
-├── drums/
-├── ficus/
-├── hotdog/
-├── materials/
-├── mic/
-└── ship/
-```
-
-**Note**: Each scene folder should contain:
-- `transforms_train.json` - Training camera poses and metadata
-- `transforms_test.json` - Test camera poses and metadata
-- `train/` or `images/` - Training images
-- `test/` - Test images (optional, some datasets have separate test folders)
-
-### 3. Explore the Data
-
-Start with the data exploration notebook to understand the dataset:
+Smoke test (no GPU or data):
 
 ```bash
-jupyter notebook notebooks/01_data_exploration.ipynb
+python scripts/smoke_test.py
 ```
 
-This notebook will:
-- Load and inspect the dataset
-- Visualize camera poses in 3D
-- Analyze image statistics
-- Understand ray generation
+Runs two training steps on CPU with synthetic data to verify the pipeline. Slow but confirms the setup works.
 
-### 4. Train the Model
+Train (default scene: lego):
 
 ```bash
-# Train with default configuration
 python experiments/train.py --config configs/lego_config.yaml
-
-# Resume from checkpoint
-python experiments/train.py --config configs/lego_config.yaml --resume outputs/checkpoints/checkpoint_step_100000.pth
-
-# Train on CPU (slower, for testing)
-python experiments/train.py --config configs/lego_config.yaml --device cpu
 ```
 
-**Training Tips:**
-- Training takes ~2-6 hours on a good GPU (RTX 3080/4090)
-- Monitor progress with TensorBoard: `tensorboard --logdir outputs/logs`
-- Checkpoints are saved every 10,000 steps by default
-- Use `image_scale: 0.5` in config for faster training (half resolution)
-
-### 5. Visualize Results
-
-Use the results visualization notebook:
+Resume from a checkpoint:
 
 ```bash
-jupyter notebook notebooks/03_results_visualization.ipynb
+python experiments/train.py --config configs/lego_config.yaml --resume outputs/checkpoints/checkpoint_step_100000.pth
 ```
 
-This will:
-- Load trained model
-- Render novel views
-- Create 360° rotation videos
-- Compute evaluation metrics (PSNR, SSIM)
+For CPU-only runs add --device cpu. Expect several hours on a typical GPU (e.g. RTX 3080). View logs with: tensorboard --logdir outputs/logs. Checkpoints are saved every 10k steps. Use image_scale: 0.5 in the config for faster runs at lower resolution.
 
-## 📊 Understanding the Outputs
+Notebooks:
 
-### What NeRF Produces
+- notebooks/01_data_exploration.ipynb — inspect data and camera poses
+- notebooks/02_training_analysis.ipynb — training curves
+- notebooks/03_results_visualization.ipynb — render novel views, 360-degree videos, PSNR/SSIM
 
-1. **Novel View Synthesis**: Render images from camera angles not seen during training
-   - Input: 100 training images
-   - Output: Any new camera angle you want
+## Project layout
 
-2. **360° Videos**: Smooth rotation around the scene
-   - Output: MP4 video showing the scene from all angles
-
-3. **Depth Maps**: Understand 3D structure
-   - Output: Grayscale images showing distance
-
-4. **3D Mesh** (optional): Extract traditional 3D model
-   - Output: .obj or .ply file for Blender/Unity
-
-### Example Results
-
-- **Before Training**: 100 photos of a Lego scene from different angles
-- **After Training**: Can render the scene from any angle, create smooth 360° videos
-
-## 🔬 Technical Details
-
-### NeRF Architecture
-
-- **Positional Encoding**: Sinusoidal encoding for 3D coordinates and viewing directions
-- **MLP Network**: 8-layer MLP predicts volume density (σ) and RGB color
-- **Volume Rendering**: Integrates density and color along rays using the volume rendering equation
-
-### Training Process
-
-1. **Ray Sampling**: Randomly sample rays from training images
-2. **Point Sampling**: Sample 3D points along each ray (stratified sampling)
-3. **Network Query**: Predict density and color for each point
-4. **Volume Rendering**: Integrate predictions into final pixel color
-5. **Loss Computation**: MSE loss between rendered and ground truth pixels
-6. **Hierarchical Sampling**: Fine network focuses on important regions
-
-### Key Optimizations
-
-- **Mixed Precision Training**: Faster training with FP16
-- **Chunked Rendering**: Process rays in chunks to avoid OOM
-- **Efficient Ray Sampling**: Only sample necessary rays per batch
-- **Hierarchical Sampling**: Coarse network guides fine network sampling
-
-## 📈 Performance Metrics
-
-The model is evaluated using:
-- **PSNR** (Peak Signal-to-Noise Ratio): Image quality metric
-- **SSIM** (Structural Similarity Index): Perceptual quality metric
-- **LPIPS** (optional): Learned perceptual metric
-
-Expected results on NeRF synthetic dataset:
-- PSNR: ~30-35 dB (depending on scene)
-- Training time: 2-6 hours on RTX 3080/4090
-- Inference: ~10-30 seconds per image (depending on resolution)
-
-## 🛠️ Configuration
-
-Edit `configs/lego_config.yaml` to customize training:
-
-```yaml
-model:
-  num_frequencies_xyz: 10    # Position encoding frequencies
-  hidden_dim: 256            # MLP hidden dimension
-  num_layers: 8              # Number of MLP layers
-
-training:
-  lr: 5e-4                  # Learning rate
-  num_rays: 1024            # Rays per batch
-  num_samples_coarse: 64    # Coarse samples per ray
-  num_samples_fine: 128     # Fine samples per ray
-  num_epochs: 100           # Training epochs
-
-data:
-  image_scale: 1.0          # Image resolution (1.0 = full, 0.5 = half)
-  white_bg: true            # White background for transparent images
+```
+src/
+  models/nerf.py           NeRF MLP and positional encoding
+  rendering/               rays, volume rendering
+  data/                    dataset, transforms
+  training/                trainer, losses
+  utils/                   metrics, visualization
+  config/                  YAML config loading
+configs/                    e.g. lego_config.yaml
+experiments/train.py       training entrypoint
+notebooks/                 exploration and visualization
 ```
 
-## 📚 Data Analysis Workflow
+Outputs (logs, checkpoints, renders) go to outputs/; this directory is gitignored.
 
-1. **01_data_exploration.ipynb**: Understand your dataset
-   - Visualize camera positions
-   - Analyze image statistics
-   - Understand ray generation
+## Config
 
-2. **02_training_analysis.ipynb**: Monitor training
-   - Plot loss curves
-   - Analyze learning rate schedule
-   - Compare coarse vs fine losses
+Main options in configs/lego_config.yaml:
 
-3. **03_results_visualization.ipynb**: Evaluate results
-   - Render novel views
-   - Create 360° videos
-   - Compute metrics
+- model: num_frequencies_xyz, hidden_dim, num_layers
+- training: lr, num_rays, num_samples_coarse, num_samples_fine, num_epochs
+- data: image_scale (1.0 = full resolution, 0.5 = half), white_bg
 
-## 🎓 Learning Resources
+Reduce num_rays and sample counts if you run out of memory; reduce image_scale for speed.
 
-### Understanding NeRF
+## Troubleshooting
 
-- **Original Paper**: [NeRF: Representing Scenes as Neural Radiance Fields](https://arxiv.org/abs/2003.08934)
-- **Key Concepts**:
-  - Volume rendering equation
-  - Positional encoding
-  - Hierarchical volume sampling
+- OOM: Lower num_rays (e.g. 512), fewer coarse/fine samples, or image_scale: 0.5. Reduce render chunk_size if needed.
+- Slow: Use a GPU; CPU is much slower. Half resolution and fewer samples help.
+- Poor quality: Check poses and normalization; run the data exploration notebook. Try more epochs or a different learning rate.
 
-### PyTorch Best Practices Demonstrated
+## References
 
-- Custom DataLoader implementation
-- Mixed precision training
-- Efficient tensor operations
-- Memory-efficient rendering
-- Configuration management
-- Comprehensive logging
+- NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis (Mildenhall et al.): https://arxiv.org/abs/2003.08934
+- Dataset: NeRF synthetic Blender scenes (see Data section for links)
 
-## 🐛 Troubleshooting
-
-### Out of Memory (OOM) Errors
-
-- Reduce `num_rays` in config (e.g., 512 instead of 1024)
-- Reduce `num_samples_coarse` and `num_samples_fine`
-- Use `image_scale: 0.5` for half resolution
-- Reduce `chunk_size` in rendering
-
-### Slow Training
-
-- Use GPU (CPU is 10-100x slower)
-- Reduce image resolution with `image_scale: 0.5`
-- Reduce number of samples per ray
-- Use mixed precision training (enabled by default)
-
-### Poor Results
-
-- Ensure camera poses are correct
-- Check that images are properly normalized
-- Increase training epochs
-- Adjust learning rate
-- Verify data quality in exploration notebook
-
-## 📝 License
-
-This project is open source and available under the MIT License.
-
-## 🙏 Acknowledgments
-
-- Original NeRF paper by Mildenhall et al.
-- NeRF synthetic dataset creators
-- PyTorch community for excellent documentation
-
-## 📧 Contact
-
-For questions or issues, please open an issue on GitHub.
-
----
-
-**Built with ❤️ using PyTorch**
+MIT License. Issues and pull requests welcome on GitHub.
