@@ -40,7 +40,7 @@ All of the following is in this repository (file paths in parentheses):
 
 ## Method summary
 
-- **Positional encoding.** Each coordinate is expanded to sin and cos at frequencies 2^0 ... 2^(L-1), so the MLP can represent high-frequency detail. L is 10 for position and 4 for direction. (This code scales by 2^k without the factor of pi used in the paper's formulation.)
+- **Positional encoding.** Each coordinate is expanded to sin and cos at frequencies 2^0 ... 2^(L-1), so the MLP can represent high-frequency detail. L is 10 for position and 4 for direction. (Like the authors' reference implementation, frequencies are 2^k without the factor of pi shown in the paper's equation. This only rescales the input coordinates and does not change what the network can represent.)
 - **Radiance field.** The MLP sees the encoded position and outputs density and a feature vector. Colour is predicted from that feature plus the encoded view direction, so density depends on position only and colour also depends on viewing direction.
 - **Volume rendering.** Along a ray, each sample gets opacity alpha = 1 - exp(-density x spacing). Transmittance is the running product of (1 - alpha) over samples in front. Each sample's weight is transmittance x alpha, and the pixel colour is the weighted sum of sample colours. Expected depth uses the same weights.
 - **Hierarchical sampling.** A coarse network renders 64 samples per ray; its weights define a distribution from which 128 extra samples are drawn. The fine network is evaluated on all samples sorted by distance.
@@ -120,7 +120,7 @@ Found while reading and running the code for this README; they are not fixed her
 - Fix the issues above, add the dataset loader, and add a test that runs one training step on synthetic rays.
 - Implement real validation (full-image PSNR on held-out views) and standard SSIM and LPIPS.
 - Train on the lego scene, then report PSNR/SSIM with the command above and commit a few renders.
-- Add the pi factor to the positional encoding to match the paper, and evaluate speed-ups (hash-grid encodings, occupancy-based sampling).
+- Evaluate speed-ups (hash-grid encodings, occupancy-based sampling).
 - Extend to real captured scenes with estimated poses.
 
 ## Related work
