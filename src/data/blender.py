@@ -103,19 +103,23 @@ class BlenderDataset(Dataset):
         if not path.exists():
             path = self.data_dir / "train" / (Path(file_path).name + ".png")
 
-        image = np.array(Image.open(path).convert("RGB"), dtype=np.float32) / 255.0
+        # Keep the alpha channel: in nerf_synthetic the RGB under alpha == 0 is
+        # black, so dropping alpha would give a black (not white) background.
+        pil_image = Image.open(path).convert("RGBA")
 
         if self.image_scale != 1.0:
-            from PIL import Image as PILImage
-            h, w = int(image.shape[0] * self.image_scale), int(image.shape[1] * self.image_scale)
-            image = np.array(
-                PILImage.fromarray((image * 255).astype(np.uint8)).resize((w, h), Image.Resampling.LANCZOS),
-                dtype=np.float32,
-            ) / 255.0
+            w = int(pil_image.width * self.image_scale)
+            h = int(pil_image.height * self.image_scale)
+            pil_image = pil_image.resize((w, h), Image.Resampling.LANCZOS)
+
+        rgba = np.array(pil_image, dtype=np.float32) / 255.0
+        rgb, alpha = rgba[..., :3], rgba[..., 3:4]
 
         if self.white_bg:
-            alpha = (image.sum(axis=-1) < 2.99).astype(np.float32)[..., None]
-            image = image * alpha + (1.0 - alpha)
+            # Composite onto white, as the reference implementation does.
+            image = rgb * alpha + (1.0 - alpha)
+        else:
+            image = rgb * alpha
 
         # 4x4 camera-to-world (OpenGL / NeRF convention)
         c2w = np.array(frame["transform_matrix"], dtype=np.float32)
