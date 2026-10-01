@@ -184,3 +184,18 @@ def test_stratified_sampling_perturbed_shapes_and_bins():
     assert (z >= 2.0).all() and (z <= 6.0).all()
     # Rays get different jitter.
     assert not torch.allclose(z[0], z[1])
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_density_not_dead_at_init(seed):
+    """With a random negative density bias every sigma was 0 and no gradient flowed."""
+    torch.manual_seed(seed)
+    model = NeRF(num_frequencies_xyz=6, num_frequencies_dir=2, hidden_dim=64)
+    xyz = torch.rand(256, 3) * 2 - 1
+    dirs = torch.nn.functional.normalize(torch.randn(256, 3), dim=-1)
+    sigma, rgb = model(xyz, dirs)
+    assert (sigma > 0).float().mean() > 0.5
+    z = torch.linspace(2.0, 6.0, 256)[None]
+    out, _, _ = VolumeRenderer.render_rays(sigma[None], rgb[None], z, white_bg=True)
+    out.sum().backward()
+    assert model.density_head.weight.grad.abs().sum() > 0

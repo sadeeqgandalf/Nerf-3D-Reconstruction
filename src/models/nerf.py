@@ -133,7 +133,13 @@ class NeRF(nn.Module):
         
         # Density output (sigma)
         self.density_head = nn.Linear(hidden_dim, 1)
-        
+        # With PyTorch's default init the hidden activations at this depth are
+        # tiny (~0.02), so sigma = ReLU(bias + small) is decided by the sign of
+        # the random bias. A negative bias makes sigma == 0 for every input,
+        # which zeroes all rendering weights and therefore every gradient: the
+        # model can never start learning. A small positive bias avoids that.
+        nn.init.constant_(self.density_head.bias, 0.1)
+
         # Feature vector for color prediction
         self.feature_head = nn.Linear(hidden_dim, hidden_dim)
         
