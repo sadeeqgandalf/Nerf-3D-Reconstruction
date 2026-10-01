@@ -134,7 +134,13 @@ class NeRFTrainer:
         focal = batch['focal'].to(self.device)
         near = batch['near'].to(self.device)
         far = batch['far'].to(self.device)
-        
+
+        # A DataLoader with batch_size=1 adds a leading batch dimension.
+        if image.dim() == 4:
+            if image.shape[0] != 1:
+                raise ValueError("train_step expects one image per batch (batch_size=1)")
+            image, pose = image[0], pose[0]
+
         height, width = image.shape[:2]
         
         # Generate rays for entire image

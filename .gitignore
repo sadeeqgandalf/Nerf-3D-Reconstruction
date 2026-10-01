@@ -38,7 +38,8 @@ ENV/
 *.ipynb_checkpoints
 
 # Data
-data/
+# Datasets (anchored to the repo root so src/data/ stays tracked)
+/data/
 *.h5
 *.hdf5
 

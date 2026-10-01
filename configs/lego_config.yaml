@@ -8,7 +8,7 @@ model:
   skip_connection_layer: 4
 
 training:
-  lr: 5e-4
+  lr: 5.0e-4  # YAML 1.1 needs the dot, otherwise this loads as a string
   lr_decay: 0.1
   lr_decay_steps: 250000
   num_epochs: 100
