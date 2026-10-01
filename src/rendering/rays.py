@@ -34,6 +34,14 @@ def generate_rays(
             - ray_origins: Tensor of shape (height, width, 3) - camera position in world space
             - ray_directions: Tensor of shape (height, width, 3) - normalized ray directions
     """
+    # Accept a pose with a leading batch dimension of 1, as produced by a
+    # DataLoader with batch_size=1 or by pose.unsqueeze(0).
+    if camera_pose.dim() == 3:
+        if camera_pose.shape[0] != 1:
+            raise ValueError(
+                f"generate_rays expects a single (4, 4) pose, got {tuple(camera_pose.shape)}"
+            )
+        camera_pose = camera_pose[0]
     device = camera_pose.device
     
     # Create pixel grid
@@ -133,57 +141,66 @@ def hierarchical_sample(
     distances: torch.Tensor,
     weights: torch.Tensor,
     num_samples: int,
+    perturb: bool = True,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Hierarchical (importance) sampling based on volume rendering weights.
     
     Samples more points in regions with high density (where weights are large).
+    Follows ``sample_pdf`` in the reference NeRF implementation: the bins are
+    the midpoints between the coarse samples, the PDF uses the weights of the
+    interior samples, and new distances are drawn by inverse-transform sampling.
+    Weights and the returned distances are detached, so no gradient flows
+    through the sample positions.
     
     Args:
         ray_origins: Ray origins of shape (..., 3)
         ray_directions: Ray directions of shape (..., 3)
-        distances: Previous sample distances of shape (..., num_coarse)
+        distances: Previous (sorted) sample distances of shape (..., num_coarse)
         weights: Volume rendering weights of shape (..., num_coarse)
         num_samples: Number of fine samples to add
+        perturb: Draw random uniforms (training) instead of a fixed linspace
         
     Returns:
-        Tuple of (points, distances) for fine samples
+        Tuple of (points, distances) for fine samples, with shapes
+        (..., num_samples, 3) and (..., num_samples)
     """
-    # Convert weights to probability distribution
-    # Add small epsilon to avoid division by zero
-    weights = weights + 1e-5
-    pdf = weights / weights.sum(dim=-1, keepdim=True)
-    
-    # Sample from this distribution
-    batch_shape = weights.shape[:-1]
-    device = weights.device
-    
-    # Inverse transform sampling
-    cdf = torch.cumsum(pdf, dim=-1)  # Cumulative distribution
-    cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], dim=-1)
-    
-    # Sample uniform random values
-    u = torch.rand(*batch_shape, num_samples, device=device)
-    
-    # Find indices where u would be inserted in cdf
+    if distances.shape[-1] < 3:
+        raise ValueError("hierarchical_sample needs at least 3 coarse samples per ray")
+    distances = distances.detach()
+    weights = weights.detach()
+
+    # Bin edges: midpoints between coarse samples -> (..., num_coarse - 1)
+    bins = 0.5 * (distances[..., 1:] + distances[..., :-1])
+    # One weight per bin interior: weights of samples 1 .. num_coarse - 2
+    bin_weights = weights[..., 1:-1] + 1e-5  # avoid NaNs on empty rays
+    pdf = bin_weights / bin_weights.sum(dim=-1, keepdim=True)
+    cdf = torch.cumsum(pdf, dim=-1)
+    cdf = torch.cat([torch.zeros_like(cdf[..., :1]), cdf], dim=-1)  # (..., num_coarse - 1)
+
+    batch_shape = cdf.shape[:-1]
+    device = cdf.device
+    if perturb:
+        u = torch.rand(*batch_shape, num_samples, device=device)
+    else:
+        u = torch.linspace(0.0, 1.0, num_samples, device=device).expand(*batch_shape, num_samples)
     u = u.contiguous()
+
+    # Invert the CDF
     indices = torch.searchsorted(cdf.contiguous(), u, right=True)
-    
-    # Get corresponding distances
-    below = torch.max(torch.zeros_like(indices - 1), indices - 1)
-    above = torch.min((cdf.shape[-1] - 1) * torch.ones_like(indices), indices)
-    indices_g = torch.stack([below, above], dim=-1)
-    
-    # Gather cdf and distance values
-    cdf_g = torch.gather(cdf.unsqueeze(-2).expand(*batch_shape, -1, -1), -1, indices_g)
-    dists_g = torch.gather(distances.unsqueeze(-2).expand(*batch_shape, -1, -1), -1, indices_g)
-    
-    # Interpolate
-    denom = cdf_g[..., 1] - cdf_g[..., 0]
+    below = torch.clamp(indices - 1, min=0)
+    above = torch.clamp(indices, max=cdf.shape[-1] - 1)
+
+    cdf_below = torch.gather(cdf, -1, below)
+    cdf_above = torch.gather(cdf, -1, above)
+    bins_below = torch.gather(bins, -1, below)
+    bins_above = torch.gather(bins, -1, above)
+
+    denom = cdf_above - cdf_below
     denom = torch.where(denom < 1e-5, torch.ones_like(denom), denom)
-    t = (u - cdf_g[..., 0]) / denom
-    fine_distances = dists_g[..., 0] + t * (dists_g[..., 1] - dists_g[..., 0])
-    
+    t = (u - cdf_below) / denom
+    fine_distances = bins_below + t * (bins_above - bins_below)
+
     # Compute 3D points
     fine_points = (
         ray_origins.unsqueeze(-2) + 
