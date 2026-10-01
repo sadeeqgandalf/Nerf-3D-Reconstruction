@@ -101,7 +101,15 @@ class NeRF(nn.Module):
             skip_connection_layer: Layer index to add skip connection
         """
         super().__init__()
-        
+
+        if not 0 < skip_connection_layer < num_layers:
+            raise ValueError(
+                f"skip_connection_layer must be in [1, {num_layers - 1}], got {skip_connection_layer}"
+            )
+        self.num_layers = num_layers
+        # Index (0-based) of the Linear layer whose input is [h, gamma(x)].
+        self.skip_connection_layer = skip_connection_layer
+
         # Positional encodings
         self.pos_encoding_xyz = PositionalEncoding(3, num_frequencies_xyz, include_input=True)
         self.pos_encoding_dir = PositionalEncoding(3, num_frequencies_dir, include_input=True)
@@ -159,16 +167,16 @@ class NeRF(nn.Module):
         dir_encoded = self.pos_encoding_dir(view_dir)
         
         # Pass through density MLP
+        # density_layers alternates [Linear_0, ReLU, Linear_1, ReLU, ...], so the
+        # Linear layer with index k lives at position 2 * k. The skip connection
+        # concatenates the encoded input only in front of that Linear layer
+        # (not in front of the ReLU that follows it).
+        skip_position = 2 * self.skip_connection_layer
         x = xyz_encoded
         for i, layer in enumerate(self.density_layers):
-            if i == 0:
-                x = layer(x)
-            elif i // 2 == self.skip_connection_layer:
-                # Skip connection: concatenate original encoded input
+            if i == skip_position:
                 x = torch.cat([x, xyz_encoded], dim=-1)
-                x = layer(x)
-            else:
-                x = layer(x)
+            x = layer(x)
         
         # Predict density (sigma)
         density = self.density_head(x)
