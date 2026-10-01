@@ -121,9 +121,12 @@ def sample_points_along_rays(
     # Convert to actual distances
     distances = near + (far - near) * t_vals
     
-    # Expand to match batch shape
-    distances = distances.view(*([1] * len(batch_shape)), -1)
-    distances = distances.expand(*batch_shape, -1)
+    # Expand to match batch shape. With perturb=True the distances are already
+    # per ray, shape (*batch_shape, num_samples); only the shared 1-D linspace
+    # needs broadcasting.
+    if distances.dim() == 1:
+        distances = distances.view(*([1] * len(batch_shape)), -1)
+        distances = distances.expand(*batch_shape, -1)
     
     # Compute 3D points along rays
     # points = origins + distances * directions

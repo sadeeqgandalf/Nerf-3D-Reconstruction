@@ -173,3 +173,14 @@ def test_ray_sampler_runs(tmp_path):
     batch = RaySampler(ds, torch.device("cpu")).sample(16)
     assert batch["ray_origins"].shape == (16, 3)
     assert batch["target_rgb"].shape == (16, 3)
+
+
+def test_stratified_sampling_perturbed_shapes_and_bins():
+    torch.manual_seed(0)
+    origins, dirs = torch.zeros(8, 3), torch.tensor([[0.0, 0.0, -1.0]]).expand(8, 3)
+    points, z = sample_points_along_rays(origins, dirs, 2.0, 6.0, 16, perturb=True)
+    assert points.shape == (8, 16, 3) and z.shape == (8, 16)
+    assert (z[..., 1:] >= z[..., :-1]).all()
+    assert (z >= 2.0).all() and (z <= 6.0).all()
+    # Rays get different jitter.
+    assert not torch.allclose(z[0], z[1])
