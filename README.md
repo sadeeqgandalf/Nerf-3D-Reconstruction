@@ -132,4 +132,4 @@ Found while reading and running the code for this README; they are not fixed her
 - B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi, R. Ng. *NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis.* ECCV 2020. https://arxiv.org/abs/2003.08934
 - NeRF synthetic (Blender) dataset, released with the paper above: https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4
 
-Released under the MIT licence as stated in `setup.py`.
+`setup.py` declares the MIT licence, but no LICENSE file is present in the repository.
