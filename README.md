@@ -2,7 +2,7 @@
 
 A from-scratch PyTorch reimplementation of Neural Radiance Fields for novel view synthesis from posed images, written to study volumetric scene representations for 3-D perception.
 
-> **Status: work in progress.** This is a reimplementation of NeRF (Mildenhall et al., ECCV 2020), not original research. The model, ray/volume-rendering code, trainer and config are in the repository, but the end-to-end pipeline does not currently run from a fresh clone; see [Known issues](#known-issues). No quantitative results or renders have been produced or committed yet.
+> **Status: work in progress.** This is a reimplementation of NeRF (Mildenhall et al., ECCV 2020), not original research. The model, ray/volume-rendering code, trainer and config are in the repository, and the pipeline runs end to end from a fresh clone (smoke-tested on CPU on a small synthetic scene, where the training loss falls). It has not yet been trained on the full lego scene, so no quantitative results or renders are committed.
 
 ## Pipeline
 
@@ -102,22 +102,22 @@ notebooks/                    Data exploration, training analysis, visualization
 
 Not yet reported. No trained checkpoint, PSNR/SSIM numbers, or rendered images are committed to this repository, and none are claimed here. Once the pipeline runs, the evaluation command above prints mean PSNR on the test views; results should be added to this section with the scene, number of training steps, and hardware.
 
-Test status, run on CPU in a fresh Python 3.12 virtual environment with current PyTorch: **1 passed, 1 failed** (`tests/test_nerf.py`). `test_positional_encoding` passes; `test_nerf_forward` fails (see below).
+Tests: `pytest tests/` gives **22 passed** on CPU (Python 3.12, current PyTorch). They cover positional encoding, the skip-connection forward pass, hierarchical sampling, volume-rendering weights on a known case, the dataset loader, and a regression test for each correctness fix.
 
 ## Known issues
 
-Found while reading and running the code for this README; they are not fixed here because this change only touches documentation.
+Open items (the earlier crashes in the forward pass, hierarchical sampling, config loading and the missing `src/data` loader are fixed and covered by tests):
 
-1. `NeRF.forward` reads `self.skip_connection_layer`, which `__init__` never stores, so any forward pass raises `AttributeError`. This is the cause of the failing test.
-2. `src/training/trainer.py` imports `hierarchical_sample` from `src.rendering`, but `src/rendering/__init__.py` does not export it, so `import src.training` raises `ImportError`.
-3. `experiments/train.py` and `experiments/render.py` import `NeRFDataset` from `src.data`, but no `src/data` package is in the repository. The `.gitignore` entry `data/` also matches `src/data/`, which is the likely reason it was never committed. The dataset loader therefore cannot be reviewed here.
-4. `Trainer.validate()` is a stub that renders nothing and returns a PSNR of 0.
-5. `compute_ssim` is a single-window global approximation, not the standard Gaussian-window SSIM, so its values are not comparable with published numbers.
+1. `Trainer.validate()` is a stub that renders nothing and returns a PSNR of 0.
+2. `compute_ssim` is a single-window global approximation, not the standard Gaussian-window SSIM, so its values are not comparable with published numbers.
+3. The mixed-precision option has no effect (no autocast is applied).
+4. The skip connection re-injects the encoded input one layer earlier than the authors' reference code. This is an architecture variant, not a bug.
+5. Sample distances are measured along each ray rather than as depth along the camera's -z axis, so depth maps differ in scale from the reference implementation.
 6. `setup.py` still has placeholder author and URL fields.
 
 ## Limitations and next steps
 
-- Fix the issues above, add the dataset loader, and add a test that runs one training step on synthetic rays.
+- Resolve the open items above and run the test suite in CI.
 - Implement real validation (full-image PSNR on held-out views) and standard SSIM and LPIPS.
 - Train on the lego scene, then report PSNR/SSIM with the command above and commit a few renders.
 - Evaluate speed-ups (hash-grid encodings, occupancy-based sampling).
@@ -132,4 +132,4 @@ Found while reading and running the code for this README; they are not fixed her
 - B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi, R. Ng. *NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis.* ECCV 2020. https://arxiv.org/abs/2003.08934
 - NeRF synthetic (Blender) dataset, released with the paper above: https://drive.google.com/drive/folders/1cK3UDIJqKAAm7zyrxRYVFJ0BRMgrwhh4
 
-`setup.py` declares the MIT licence, but no LICENSE file is present in the repository.
+MIT licence (see `LICENSE`).
